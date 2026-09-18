@@ -16,3 +16,5 @@ services:
         value: "6"
       - key: SOLVER_TIMEOUT_SECONDS
         value: "4"
+      - key: PORT
+        value: "10000"

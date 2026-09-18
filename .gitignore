@@ -11,3 +11,6 @@ htmlcov/
 report.md
 *.zip
 .DS_Store
+temp/
+.puku-cli/
+video_script.md

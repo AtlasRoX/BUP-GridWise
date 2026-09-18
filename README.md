@@ -324,8 +324,7 @@ The service is configured for zero-downtime deployment on Render:
 
 ## Tie-Breaker Deliverable: 3-Minute Solution Video
 
-The complete, word-for-word 3-minute presentation script and slide outline is available in:
-📄 [`video_script.md`](video_script.md)
+The 3-minute presentation structure covers:
 
 It covers:
 1. **0:00 - 0:30**: Problem understanding & decoupled 5-stage architecture.

@@ -3,7 +3,7 @@ FROM python:3.13-slim-bookworm
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PORT=8000
+    PORT=10000
 
 WORKDIR /app
 
@@ -17,8 +17,8 @@ COPY BUP_CSE_FEST_2026_Preli_Public_Sample_Cases.json .
 COPY verify_solution.py .
 COPY benchmark_latency.py .
 
-# Expose port (Render overrides with dynamic $PORT)
-EXPOSE ${PORT}
+# Expose port (Render defaults to 10000)
+EXPOSE 10000
 
 # Run FastAPI service with single worker to operate under 512MB RAM limit
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000} --workers 1"]
