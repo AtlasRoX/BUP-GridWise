@@ -405,46 +405,6 @@ The service is configured for zero-downtime deployment on Render:
 
 ---
 
-## Tie-Breaker Deliverable: 3-Minute Solution Video
-
-> **Official Tie-Breaker Deliverable (Participant Guide Section 02 & Section 10)**: Reviewed to break top-tier ties between solutions scoring equal marks on the automated test harness.
-
-🎥 **Video Presentation Link**: [GridWise 3-Minute Solution Architecture Presentation](https://youtu.be/your-video-link-here) *(MP4 / Unlisted Video)*
-
-### Structure & Timing Breakdown (180 Seconds):
-1. **0:00 – 0:30 (30s)**: Introduction, problem understanding, and core architectural principle (*"Human language must never directly become mathematical equations"*).
-2. **0:30 – 1:15 (45s)**: NVIDIA NIM Nemotron-3-Super-120B semantic interpretation, battery context prompt injection, and deterministic guardrail validation.
-3. **1:15 – 2:00 (45s)**: Exact 168-variable HiGHS MILP mathematical formulation, mutual charge/discharge exclusivity, and battery neutrality.
-4. **2:00 – 2:30 (30s)**: Independent replay audit firewall, physical invariant verification, and recalculated totals.
-5. **2:30 – 3:00 (30s)**: Live Render cloud deployment demonstration, Postman test suites, and judge verification script execution.
-
----
-
-## Mathematical Model Details
-
-The 24-hour dispatch problem is solved as a **Mixed-Integer Linear Program (MILP)**:
-- **Decision Variables** (168 total):
-  - $G[h] \ge 0$: Grid import (continuous)
-  - $S[h] \ge 0$: Solar consumed (continuous)
-  - $C[h] \ge 0$: Battery charge (continuous)
-  - $D[h] \ge 0$: Battery discharge (continuous)
-  - $E[h] \ge 0$: Battery stored energy at end of hour (continuous)
-  - $z_C[h] \in \{0, 1\}$: Binary charge mode indicator
-  - $z_D[h] \in \{0, 1\}$: Binary discharge mode indicator
-- **Objective**:
-  $$\min \sum_{h=0}^{23} G[h] \times \text{tariff}[h]$$
-- **Constraints**:
-  1. Energy balance: $G[h] + S[h] + D[h] = \text{demand}[h] + C[h]$
-  2. Solar bound: $0 \le S[h] \le \text{effective\_solar}[h]$
-  3. Storage evolution: $E[h] = E[h-1] + C[h] - D[h]$ with $E[-1] = \text{initial\_energy}$
-  4. Bounds: $\text{reserve\_floor}[h] \le E[h] \le \text{capacity}$
-  5. Rate limits: $C[h] \le \text{max\_charge} \times z_C[h]$, $D[h] \le \text{max\_discharge} \times z_D[h]$
-  6. Action exclusivity: $z_C[h] + z_D[h] \le 1$
-  7. End-of-day neutrality: $E[23] = \text{initial\_energy}$
-  8. Directive bounds: $C[h] = 0$ in no-charge hours, $D[h] = 0$ in no-discharge hours, $G[h] \le \text{grid\_cap}[h]$.
-
----
-
 ## Security, Limitations & Secret Handling
 
 - **No Secrets in Code/Images**: No API keys, passwords, or credentials are baked into the Docker image or committed to git.
