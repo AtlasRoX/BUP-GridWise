@@ -218,6 +218,12 @@ python benchmark_latency.py --base-url https://gridwise-dbdi.onrender.com --requ
 
 The GridWise test suite includes a comprehensive Postman collection ([`postman/GridWise.postman_collection.json`](postman/GridWise.postman_collection.json)) and pre-configured environment files ([`postman/GridWise.postman_environment.json`](postman/GridWise.postman_environment.json) and [`postman/GridWise_Render_Production.postman_environment.json`](postman/GridWise_Render_Production.postman_environment.json)).
 
+### Automated Headless Execution (Newman CLI)
+Run all 26 test requests headlessly against the live cloud service in one command:
+```bash
+newman run postman/GridWise.postman_collection.json -e postman/GridWise_Render_Production.postman_environment.json
+```
+
 The following execution screenshots portray key representative cases across the test suite:
 
 ---
@@ -275,6 +281,13 @@ The following execution screenshots portray key representative cases across the 
 ## Sample cURL Commands
 
 ### 1. Health Probe
+
+**Against Live Cloud (Render):**
+```bash
+curl -X GET https://gridwise-dbdi.onrender.com/health
+```
+
+**Against Local Service:**
 ```bash
 curl -X GET http://localhost:8000/health
 ```
@@ -284,8 +297,10 @@ curl -X GET http://localhost:8000/health
 ```
 
 ### 2. Sample Energy Optimization Request (SAMPLE-01)
+
+**Against Live Cloud (Render):**
 ```bash
-curl -X POST http://localhost:8000/optimize-energy \
+curl -X POST https://gridwise-dbdi.onrender.com/optimize-energy \
   -H "Content-Type: application/json" \
   -d '{
     "scenario_id": "SAMPLE-01",
@@ -333,7 +348,7 @@ curl -X POST http://localhost:8000/optimize-energy \
 
 ## Docker Deployment & Fallback Image
 
-### 1. Build the Container Image
+### 1. Build the Container Image Locally
 ```bash
 docker build -t gridwise-service:latest .
 ```
@@ -341,15 +356,25 @@ docker build -t gridwise-service:latest .
 ### 2. Run the Container
 ```bash
 docker run -d \
-  -p 8000:8000 \
+  -p 10000:10000 \
   -e NVIDIA_NIM_API_KEY="your-key-here" \
   --name gridwise \
   gridwise-service:latest
 ```
+*(To map to port 8000 on your host, use `-p 8000:10000`)*
 
 ### 3. Test Container
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:10000/health
+```
+
+### 4. Pullable Fallback Image Reference (Organizer Rubric Section 02)
+```bash
+# Pull official verified fallback image
+docker pull ghcr.io/atlasrox/bup-gridwise:latest
+
+# Run verified image
+docker run -d -p 10000:10000 -e NVIDIA_NIM_API_KEY="your-key-here" ghcr.io/atlasrox/bup-gridwise:latest
 ```
 
 ---
@@ -382,14 +407,16 @@ The service is configured for zero-downtime deployment on Render:
 
 ## Tie-Breaker Deliverable: 3-Minute Solution Video
 
-The 3-minute presentation structure covers:
+> **Official Tie-Breaker Deliverable (Participant Guide Section 02 & Section 10)**: Reviewed to break top-tier ties between solutions scoring equal marks on the automated test harness.
 
-It covers:
-1. **0:00 - 0:30**: Problem understanding & decoupled 5-stage architecture.
-2. **0:30 - 1:15**: NVIDIA NIM Nemotron semantic interpretation & guardrails.
-3. **1:15 - 2:00**: Exact 168-variable HiGHS MILP optimization model.
-4. **2:00 - 2:30**: Independent replay validation firewall & recalculated totals.
-5. **2:30 - 3:00**: Live Render deployment & test suite verification.
+🎥 **Video Presentation Link**: [GridWise 3-Minute Solution Architecture Presentation](https://youtu.be/your-video-link-here) *(MP4 / Unlisted Video)*
+
+### Structure & Timing Breakdown (180 Seconds):
+1. **0:00 – 0:30 (30s)**: Introduction, problem understanding, and core architectural principle (*"Human language must never directly become mathematical equations"*).
+2. **0:30 – 1:15 (45s)**: NVIDIA NIM Nemotron-3-Super-120B semantic interpretation, battery context prompt injection, and deterministic guardrail validation.
+3. **1:15 – 2:00 (45s)**: Exact 168-variable HiGHS MILP mathematical formulation, mutual charge/discharge exclusivity, and battery neutrality.
+4. **2:00 – 2:30 (30s)**: Independent replay audit firewall, physical invariant verification, and recalculated totals.
+5. **2:30 – 3:00 (30s)**: Live Render cloud deployment demonstration, Postman test suites, and judge verification script execution.
 
 ---
 
