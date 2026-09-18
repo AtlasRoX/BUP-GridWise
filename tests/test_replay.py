@@ -46,11 +46,10 @@ def test_replay_catches_energy_balance_violation(baseline_scenario):
     peak_grid = 80.0
 
     with pytest.raises(ReplayValidationError, match="energy balance violated"):
-        replay_validate_plan(plan, baseline_scenario, compiled, total_grid, total_cost, peak_grid)
+        replay_validate_plan(plan, baseline_scenario, [], total_grid, total_cost, peak_grid)
 
 
 def test_replay_catches_neutrality_violation(baseline_scenario):
-    compiled = compile_directives(baseline_scenario.hours, baseline_scenario.battery, [])
     # Plan where battery is discharged at hour 23 but doesn't restore to initial
     plan = [
         HourlyPlanEntry(
@@ -69,4 +68,4 @@ def test_replay_catches_neutrality_violation(baseline_scenario):
     peak_grid = 80.0
 
     with pytest.raises(ReplayValidationError):
-        replay_validate_plan(plan, baseline_scenario, compiled, total_grid, total_cost, peak_grid)
+        replay_validate_plan(plan, baseline_scenario, [], total_grid, total_cost, peak_grid)

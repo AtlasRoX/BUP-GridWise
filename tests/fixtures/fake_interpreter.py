@@ -1,7 +1,12 @@
+"""
+Deterministic test fixture parser for offline test scenarios.
+This fixture isolates deterministic rule extraction for unit tests without
+affecting production LLM execution paths.
+"""
+
 import re
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from app.models.directives import (
-    DirectiveType,
     SolarReductionAdjustment,
     BatteryReserveAdjustment,
     HoursOnlyAdjustment,
@@ -21,8 +26,6 @@ def parse_time_window(text: str) -> Optional[List[int]]:
       - 'between 11 AM and 2 PM' -> [11, 12, 13]
     """
     text_lower = text.lower()
-
-    # Normalize noon and midnight
     text_norm = text_lower.replace("noon", "12 pm").replace("midnight", "12 am")
 
     pattern = r"(?:from|between)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:until|to|and)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm))"
@@ -52,7 +55,6 @@ def parse_time_window(text: str) -> Optional[List[int]]:
             return 0 if val == 12 else val
         return val
 
-    # End string always has meridiem in well-formed notes
     end_meridiem = "pm" if "pm" in end_str else ("am" if "am" in end_str else None)
     start_hour = to_hour(start_str, default_meridiem=end_meridiem)
     end_hour = to_hour(end_str)
@@ -64,10 +66,7 @@ def parse_time_window(text: str) -> Optional[List[int]]:
 
 
 def parse_solar_factor(text: str) -> Optional[float]:
-    """
-    Extracts remaining usable solar fraction from text.
-    Returns None if no clear numeric factor or fraction is specified (no guessing).
-    """
+    """Extracts remaining usable solar fraction from text."""
     text_lower = text.lower()
     if "one-fifth" in text_lower:
         return 0.2
@@ -90,10 +89,7 @@ def parse_solar_factor(text: str) -> Optional[float]:
 
 
 def parse_battery_reserve(text: str, battery: BatteryConfig) -> Optional[float]:
-    """
-    Extracts battery reserve in kWh, handling relative percentage of capacity.
-    Returns None if no numeric reserve is specified (no guessing).
-    """
+    """Extracts battery reserve in kWh, handling relative percentage of capacity."""
     text_lower = text.lower()
     pct_match = re.search(r"(\d{1,3})%\s*of\s*(?:the\s*)?battery\s*capacity", text_lower)
     if pct_match:
@@ -108,10 +104,7 @@ def parse_battery_reserve(text: str, battery: BatteryConfig) -> Optional[float]:
 
 
 def parse_grid_cap(text: str) -> Optional[float]:
-    """
-    Extracts max grid import cap in kWh.
-    Returns None if no numeric cap is specified (no guessing).
-    """
+    """Extracts max grid import cap in kWh."""
     text_lower = text.lower()
     kwh_match = re.search(r"(?:exceed|limit|stay at or below|cap of)\s*(\d+(?:\.\d+)?)\s*kwh", text_lower)
     if kwh_match:
@@ -126,8 +119,7 @@ def fallback_interpret_note(
     note_index: int, note_text: str, battery: BatteryConfig
 ) -> DirectiveInterpretation:
     """
-    Deterministic reference/test parser for offline testing.
-    Strictly verifies existence of parameters without inventing defaults.
+    Deterministic reference/test parser for offline unit testing fixtures.
     """
     text_lower = note_text.lower()
     hours = parse_time_window(note_text)

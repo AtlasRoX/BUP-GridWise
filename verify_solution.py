@@ -19,7 +19,9 @@ import json
 import os
 import sys
 import httpx
+from pydantic import ValidationError
 from app.main import app
+from app.models.response import OptimizeEnergyResponse
 
 SAMPLE_FILE = os.path.join(os.path.dirname(__file__), "BUP_CSE_FEST_2026_Preli_Public_Sample_Cases.json")
 
@@ -228,7 +230,7 @@ async def run_verification(base_url: str = None):
             return False
         print("[+] /health check PASSED (status: ok)\n")
 
-        print(f"{'Case ID':<10} {'Directives':<12} {'Physics':<10} {'Team Cost':<14} {'Ref Cost':<14} {'Quality':<10} {'Status':<10}")
+        print(f"{'Case ID':<10} {'Schema':<8} {'Directives':<12} {'Physics':<10} {'Team Cost':<14} {'Ref Cost':<14} {'Quality':<10} {'Status':<10}")
         print("-" * 90)
 
         all_passed = True
@@ -242,30 +244,43 @@ async def run_verification(base_url: str = None):
 
             resp = await client.post("/optimize-energy", json=case_input)
             if resp.status_code != 200:
-                print(f"{case_id:<10} {'FAIL':<12} {'FAIL':<10} {'HTTP ' + str(resp.status_code):<14} {ref_cost:<14.2f} {'0.0000':<10} {'FAIL':<10}")
+                print(f"{case_id:<10} {'FAIL':<8} {'FAIL':<12} {'FAIL':<10} {'HTTP ' + str(resp.status_code):<14} {ref_cost:<14.2f} {'0.0000':<10} {'FAIL':<10}")
                 all_passed = False
                 continue
 
             data = resp.json()
+
+            # 1. Pydantic Strict Schema Validation
+            try:
+                OptimizeEnergyResponse.model_validate(data)
+                schema_ok = True
+                schema_msg = "Valid"
+            except ValidationError as ve:
+                schema_ok = False
+                schema_msg = f"Pydantic schema validation error: {ve}"
+
             team_cost = data.get("total_cost_bdt", 0.0)
             q_ratio = min(1.0, ref_cost / team_cost) if team_cost > 0 else 0.0
             quality_ratios.append(q_ratio)
 
-            # 1. Deep Directive Verification
+            # 2. Deep Directive Verification
             dir_ok, dir_msg = verify_case_directives(data.get("directive_interpretation", []), expected.get("directive_interpretation", []))
 
-            # 2. Deep Physical Replay & Aggregates Verification
+            # 3. Deep Physical Replay & Aggregates Verification
             phy_ok, phy_msg = replay_verify_physics(case_input, data)
 
-            passed = dir_ok and phy_ok and (q_ratio >= 0.99)
+            passed = schema_ok and dir_ok and phy_ok and (q_ratio >= 0.99)
             if not passed:
                 all_passed = False
 
+            schema_str = "PASS" if schema_ok else "FAIL"
             dir_str = "PASS" if dir_ok else "FAIL"
             phy_str = "PASS" if phy_ok else "FAIL"
             status_str = "PASS" if passed else "FAIL"
 
-            print(f"{case_id:<10} {dir_str:<12} {phy_str:<10} {team_cost:<14.2f} {ref_cost:<14.2f} {q_ratio:<10.4f} {status_str:<10}")
+            print(f"{case_id:<10} {schema_str:<8} {dir_str:<12} {phy_str:<10} {team_cost:<14.2f} {ref_cost:<14.2f} {q_ratio:<10.4f} {status_str:<10}")
+            if not schema_ok:
+                print(f"   [!] Schema error: {schema_msg}")
             if not dir_ok:
                 print(f"   [!] Directive error: {dir_msg}")
             if not phy_ok:

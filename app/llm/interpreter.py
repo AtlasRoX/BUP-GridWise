@@ -8,7 +8,6 @@ from app.llm.client import get_llm_client
 from app.llm.prompt import SYSTEM_PROMPT, build_user_prompt
 from app.models.directives import DirectiveInterpretation
 from app.models.request import BatteryConfig
-from app.rules.normalizer import fallback_interpret_note
 
 logger = logging.getLogger("gridwise.llm.interpreter")
 

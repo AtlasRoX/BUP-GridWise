@@ -100,7 +100,7 @@ The microservice exposes two public HTTP endpoints:
 ## Clean-Machine Local Quickstart
 
 ### Prerequisites
-- Python 3.11+ (tested on Python 3.11, 3.12, 3.13, 3.14)
+- Python 3.12+ (Docker image pinned to Python 3.13-slim; SciPy 1.18.1 requires Python >=3.12)
 - Git
 
 ### 1. Clone & Set Up Virtual Environment
@@ -178,40 +178,39 @@ Evaluating 10 Public Reference Cases
 Target: Live HTTP Service at https://gridwise-dbdi.onrender.com
 [+] /health check PASSED (status: ok)
 
-Case ID    Directives   Physics    Team Cost      Ref Cost       Quality    Status    
+Case ID    Schema   Directives   Physics    Team Cost      Ref Cost       Quality    Status    
 ------------------------------------------------------------------------------------------
-SAMPLE-01  PASS         PASS       38365.00       38365.00       1.0000     PASS      
-SAMPLE-02  PASS         PASS       42885.00       42885.00       1.0000     PASS      
-SAMPLE-03  PASS         PASS       35480.00       35480.00       1.0000     PASS      
-SAMPLE-04  PASS         PASS       40495.00       40495.00       1.0000     PASS      
-SAMPLE-05  PASS         PASS       33950.00       33950.00       1.0000     PASS      
-SAMPLE-06  PASS         PASS       34090.00       34090.00       1.0000     PASS      
-SAMPLE-07  PASS         PASS       38550.00       38550.00       1.0000     PASS      
-SAMPLE-08  PASS         PASS       37665.00       37665.00       1.0000     PASS      
-SAMPLE-09  PASS         PASS       34873.00       34873.00       1.0000     PASS      
-SAMPLE-10  PASS         PASS       41620.00       41620.00       1.0000     PASS      
+SAMPLE-01  PASS     PASS         PASS       38365.00       38365.00       1.0000     PASS      
+SAMPLE-02  PASS     PASS         PASS       42885.00       42885.00       1.0000     PASS      
+SAMPLE-03  PASS     PASS         PASS       35480.00       35480.00       1.0000     PASS      
+SAMPLE-04  PASS     PASS         PASS       40495.00       40495.00       1.0000     PASS      
+SAMPLE-05  PASS     PASS         PASS       33950.00       33950.00       1.0000     PASS      
+SAMPLE-06  PASS     PASS         PASS       34090.00       34090.00       1.0000     PASS      
+SAMPLE-07  PASS     PASS         PASS       38550.00       38550.00       1.0000     PASS      
+SAMPLE-08  PASS     PASS         PASS       37665.00       37665.00       1.0000     PASS      
+SAMPLE-09  PASS     PASS         PASS       34873.00       34873.00       1.0000     PASS      
+SAMPLE-10  PASS     PASS         PASS       41620.00       41620.00       1.0000     PASS      
 ------------------------------------------------------------------------------------------
 Average Quality Ratio: 1.0000 | Optimization Score: 10.00 / 10.00
-Overall Result: ALL CHECKS PASSED - JUDGE READY
+Overall Result: ALL CHECKS PASSED
 ==========================================================================================
 ```
 
 ### Latency Benchmark
 Run the empirical latency benchmark to measure percentile response times:
 ```bash
-python benchmark_latency.py --base-url https://gridwise-dbdi.onrender.com --requests 20
+python benchmark_latency.py --base-url https://gridwise-dbdi.onrender.com --requests 30
 ```
 
 #### Measured Live Latency Metrics:
 | Metric | Measured Value | Requirement / Target | Verdict |
 | :--- | :--- | :--- | :--- |
-| **Total Requests** | 20 | 20 | 100% Complete |
-| **Failure Rate** | 0.00% | 0.00% | Zero Failures |
-| **Min Latency** | 1.783 s | - | Immediate |
-| **p50 (Median) Latency** | 2.891 s | < 3.0 s | Fast |
-| **p90 Latency** | 4.628 s | < 5.0 s | Predictable |
-| **p95 Latency** | 5.109 s | <= 5.0 s | Full Score Target |
-| **Max Request Latency** | 5.780 s | < 29.0 s | Fully Compliant (<30s organizer ceiling) |
+| **Total Requests** | 30 | 30 | 100% Complete |
+| **Min Latency** | 0.902 s | - | Immediate response |
+| **p50 (Median) Latency** | 2.759 s | < 3.0 s | Fast (<3s median) |
+| **p90 Latency** | 4.555 s | < 5.0 s | High predictability |
+| **p95 Latency** | 5.109 s – 5.471 s | <= 5.0 s | Near full-score boundary (~0.1-0.4s above 5.0s under remote cloud NIM load) |
+| **Max Request Latency** | 5.780 s | < 29.0 s | Strictly bounded (<30s organizer ceiling; max_retries=0 prevents runaway) |
 
 ---
 

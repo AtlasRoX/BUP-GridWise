@@ -24,6 +24,10 @@ async def test_invalid_request_returns_400():
         assert data["error"] == "Bad Request"
 
 
+from unittest.mock import patch
+from app.models.directives import DirectiveInterpretation
+
+
 @pytest.mark.asyncio
 async def test_optimize_energy_valid():
     hours = [
@@ -44,10 +48,21 @@ async def test_optimize_energy_valid():
         "battery": battery,
     }
 
-    transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/optimize-energy", json=payload)
-        assert response.status_code == 200
+    mock_directive = [
+        DirectiveInterpretation(
+            note_index=0,
+            applies=False,
+            directive_type="no_op",
+            structured_adjustment=None,
+            explanation="Routine campus activity, no operational change.",
+        )
+    ]
+
+    with patch("app.services.optimize_energy.interpret_operator_notes", return_value=mock_directive):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post("/optimize-energy", json=payload)
+            assert response.status_code == 200
         data = response.json()
         assert data["scenario_id"] == "test_api_01"
         assert len(data["directive_interpretation"]) == 1

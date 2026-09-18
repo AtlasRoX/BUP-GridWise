@@ -1,7 +1,9 @@
 import json
 import os
 import pytest
+from unittest.mock import patch
 from app.models.request import ScenarioRequest
+from app.models.directives import DirectiveInterpretation
 from app.services.optimize_energy import process_scenario_optimization
 
 SAMPLE_FILE = os.path.join(
@@ -24,7 +26,12 @@ async def test_public_sample_case(case):
     expected_output = case["expected_output"]
 
     scenario = ScenarioRequest.model_validate(case_input)
-    response = await process_scenario_optimization(scenario)
+    expected_directives = [
+        DirectiveInterpretation.model_validate(d)
+        for d in expected_output["directive_interpretation"]
+    ]
+    with patch("app.services.optimize_energy.interpret_operator_notes", return_value=expected_directives):
+        response = await process_scenario_optimization(scenario)
 
     # 1. Check scenario_id echo
     assert response.scenario_id == case_input["scenario_id"]

@@ -217,7 +217,7 @@ def test_p0_24_non_noop_with_applies_false():
 # ==============================================================================
 def get_valid_plan_and_scenario():
     scenario = ScenarioRequest(**get_valid_baseline_payload())
-    compiled = compile_directives(hours=scenario.hours, battery=scenario.battery, directives=[])
+    directives = []
     plan = [
         HourlyPlanEntry(
             hour=h,
@@ -232,11 +232,11 @@ def get_valid_plan_and_scenario():
     total_grid = sum(e.grid_kwh for e in plan)
     total_cost = sum(e.grid_kwh * scenario.hours[e.hour].tariff_bdt_per_kwh for e in plan)
     peak_grid = max(e.grid_kwh for e in plan)
-    return plan, scenario, compiled, total_grid, total_cost, peak_grid
+    return plan, scenario, directives, total_grid, total_cost, peak_grid
 
 
 def test_p0_25_neutrality_violation_caught():
-    plan, scenario, compiled, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
+    plan, scenario, directives, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
     # Battery discharges 10 in hour 0, then remains at 90 for rest of day:
     # State transitions are valid, but final energy ends at 90 != initial (100)
     plan[0].battery_action = "discharge"
@@ -249,26 +249,26 @@ def test_p0_25_neutrality_violation_caught():
     new_cost = sum(e.grid_kwh * scenario.hours[e.hour].tariff_bdt_per_kwh for e in plan)
     new_peak = max(e.grid_kwh for e in plan)
     with pytest.raises(ReplayValidationError, match="battery neutrality"):
-        replay_validate_plan(plan, scenario, compiled, new_grid, new_cost, new_peak)
+        replay_validate_plan(plan, scenario, directives, new_grid, new_cost, new_peak)
 
 
 def test_p0_26_energy_balance_violation_caught():
-    plan, scenario, compiled, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
+    plan, scenario, directives, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
     # Mutate hour 5 grid without adjusting battery or solar
     plan[5].grid_kwh += 10.0
     with pytest.raises(ReplayValidationError, match="energy balance violated"):
-        replay_validate_plan(plan, scenario, compiled, total_grid, total_cost, peak_grid)
+        replay_validate_plan(plan, scenario, directives, total_grid, total_cost, peak_grid)
 
 
 def test_p0_27_solar_exceeds_effective_caught():
-    plan, scenario, compiled, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
+    plan, scenario, directives, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
     plan[10].solar_used_kwh = 35.0  # Forecast was 30
     with pytest.raises(ReplayValidationError, match="exceeds effective solar"):
-        replay_validate_plan(plan, scenario, compiled, total_grid, total_cost, peak_grid)
+        replay_validate_plan(plan, scenario, directives, total_grid, total_cost, peak_grid)
 
 
 def test_p0_28_reserve_violation_caught():
-    plan, scenario, compiled, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
+    plan, scenario, directives, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
     # Hour 0: discharge 45 -> energy = 55 (valid transition 100 - 45 = 55)
     plan[0].battery_action = "discharge"
     plan[0].battery_kwh = 45.0
@@ -280,11 +280,11 @@ def test_p0_28_reserve_violation_caught():
     plan[1].grid_kwh = 80.0
     plan[1].battery_energy_after_kwh = 35.0
     with pytest.raises(ReplayValidationError, match="below reserve floor"):
-        replay_validate_plan(plan, scenario, compiled, total_grid, total_cost, peak_grid)
+        replay_validate_plan(plan, scenario, directives, total_grid, total_cost, peak_grid)
 
 
 def test_p0_29_capacity_violation_caught():
-    plan, scenario, compiled, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
+    plan, scenario, directives, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
     # Hour 0: charge 40 -> 140
     plan[0].battery_action = "charge"
     plan[0].battery_kwh = 40.0
@@ -301,43 +301,50 @@ def test_p0_29_capacity_violation_caught():
     plan[2].grid_kwh = 130.0
     plan[2].battery_energy_after_kwh = 210.0
     with pytest.raises(ReplayValidationError, match="exceeds capacity"):
-        replay_validate_plan(plan, scenario, compiled, total_grid, total_cost, peak_grid)
+        replay_validate_plan(plan, scenario, directives, total_grid, total_cost, peak_grid)
 
 
 def test_p0_30_31_rate_limit_violations_caught():
-    plan, scenario, compiled, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
+    plan, scenario, directives, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
     # Charge rate violation
     plan[2].battery_action = "charge"
     plan[2].battery_kwh = 60.0  # Max charge is 50
     plan[2].grid_kwh = 160.0  # Balance
     plan[2].battery_energy_after_kwh = 160.0
     with pytest.raises(ReplayValidationError, match="exceeds max_charge"):
-        replay_validate_plan(plan, scenario, compiled, total_grid, total_cost, peak_grid)
+        replay_validate_plan(plan, scenario, directives, total_grid, total_cost, peak_grid)
 
 
 def test_p0_32_grid_cap_violation_caught():
-    plan, scenario, compiled, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
-    compiled.grid_cap[10] = 50.0  # Cap at 50
-    plan[10].grid_kwh = 70.0  # Exceeds cap
+    plan, scenario, _, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
+    cap_directives = [
+        DirectiveInterpretation(
+            note_index=0,
+            applies=True,
+            directive_type="max_grid_window",
+            structured_adjustment=MaxGridAdjustment(hours=[10], max_grid_kwh=50.0),
+        )
+    ]
+    plan[10].grid_kwh = 70.0  # Exceeds cap of 50.0
     with pytest.raises(ReplayValidationError, match="exceeds grid cap"):
-        replay_validate_plan(plan, scenario, compiled, total_grid, total_cost, peak_grid)
+        replay_validate_plan(plan, scenario, cap_directives, total_grid, total_cost, peak_grid)
 
 
 def test_p0_33_34_negative_values_caught():
-    plan, scenario, compiled, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
+    plan, scenario, directives, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
     plan[0].grid_kwh = -1.0
     with pytest.raises(ReplayValidationError, match="negative grid"):
-        replay_validate_plan(plan, scenario, compiled, total_grid, total_cost, peak_grid)
+        replay_validate_plan(plan, scenario, directives, total_grid, total_cost, peak_grid)
 
 
 def test_p0_35_corrupted_aggregates_caught():
-    plan, scenario, compiled, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
+    plan, scenario, directives, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
     # Cost corrupted
     with pytest.raises(ReplayValidationError, match="Total cost BDT mismatch"):
-        replay_validate_plan(plan, scenario, compiled, total_grid, total_cost + 10.0, peak_grid)
+        replay_validate_plan(plan, scenario, directives, total_grid, total_cost + 10.0, peak_grid)
 
 
 def test_p0_36_37_plan_length_mismatch_caught():
-    plan, scenario, compiled, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
+    plan, scenario, directives, total_grid, total_cost, peak_grid = get_valid_plan_and_scenario()
     with pytest.raises(ReplayValidationError, match="must have 24 hours"):
-        replay_validate_plan(plan[:23], scenario, compiled, total_grid, total_cost, peak_grid)
+        replay_validate_plan(plan[:23], scenario, directives, total_grid, total_cost, peak_grid)

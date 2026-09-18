@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bookworm
+FROM python:3.13-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY BUP_CSE_FEST_2026_Preli_Public_Sample_Cases.json .
 COPY verify_solution.py .
+COPY benchmark_latency.py .
 
 # Expose port (Render overrides with dynamic $PORT)
 EXPOSE ${PORT}

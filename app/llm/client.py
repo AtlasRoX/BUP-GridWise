@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Optional
 import httpx
@@ -7,11 +8,17 @@ from app.config import settings
 logger = logging.getLogger("gridwise.llm.client")
 
 _client: Optional[AsyncOpenAI] = None
+_client_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
 def get_llm_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
+    global _client, _client_loop
+    try:
+        current_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+
+    if _client is None or _client_loop is None or _client_loop != current_loop or _client_loop.is_closed():
         api_key = settings.effective_api_key or "dummy-key-for-local-testing"
         base_url = settings.effective_base_url
 
@@ -24,13 +31,19 @@ def get_llm_client() -> AsyncOpenAI:
             api_key=api_key,
             base_url=base_url,
             http_client=http_client,
+            max_retries=0,
         )
+        _client_loop = current_loop
         logger.info(f"Initialized LLM client with base_url={base_url}, model={settings.effective_model}")
     return _client
 
 
 async def close_llm_client() -> None:
-    global _client
+    global _client, _client_loop
     if _client is not None:
-        await _client.close()
+        try:
+            await _client.close()
+        except Exception:
+            pass
         _client = None
+        _client_loop = None

@@ -1,6 +1,6 @@
 import pytest
 from app.models.request import BatteryConfig
-from app.rules.normalizer import fallback_interpret_note
+from tests.fixtures.fake_interpreter import fallback_interpret_note
 
 
 @pytest.fixture

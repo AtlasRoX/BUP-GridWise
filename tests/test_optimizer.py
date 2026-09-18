@@ -43,7 +43,7 @@ def test_battery_arbitrage_and_neutrality():
     replay_validate_plan(
         plan=plan,
         scenario=type("MockScenario", (), {"hours": hours, "battery": battery})(),
-        compiled=compiled,
+        directives=[],
         total_grid_kwh=total_grid,
         total_cost_bdt=total_cost,
         peak_grid_kwh=peak_grid,

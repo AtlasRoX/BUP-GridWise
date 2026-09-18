@@ -17,59 +17,47 @@ class ReplayValidationError(Exception):
 def replay_validate_plan(
     plan: List[HourlyPlanEntry],
     scenario: ScenarioRequest,
-    directives: Any = None,
-    total_grid_kwh: float = 0.0,
-    total_cost_bdt: float = 0.0,
-    peak_grid_kwh: float = 0.0,
+    directives: List[DirectiveInterpretation],
+    total_grid_kwh: float,
+    total_cost_bdt: float,
+    peak_grid_kwh: float,
     tolerance: float = 0.01,
-    compiled: Any = None,
 ) -> None:
     """
     Independent hour-by-hour re-evaluation of the entire schedule against
     energy balance, effective solar, battery dynamics, rate limits, directive rules,
     end-of-day neutrality, and aggregate totals.
-    When given raw directives, this evaluator calculates reference constraints
-    strictly independently without consuming production compiler output.
+    This evaluator calculates reference constraints strictly independently
+    from raw validated directives without consuming production compiler output.
     """
     if len(plan) != 24:
         raise ReplayValidationError(f"Hourly plan must have 24 hours, got {len(plan)}")
 
-    target_source = compiled if compiled is not None else directives
+    effective_solar = [h.solar_kwh for h in scenario.hours]
+    reserve_floor = [scenario.battery.minimum_energy_kwh for _ in range(24)]
+    charge_allowed = [True for _ in range(24)]
+    discharge_allowed = [True for _ in range(24)]
+    grid_cap = [float("inf") for _ in range(24)]
 
-    if hasattr(target_source, "effective_solar"):
-        # Backward compatibility with existing tests passing CompiledConstraints
-        effective_solar = list(target_source.effective_solar)
-        reserve_floor = list(target_source.reserve_floor)
-        charge_allowed = list(target_source.charge_allowed)
-        discharge_allowed = list(target_source.discharge_allowed)
-        grid_cap = list(target_source.grid_cap)
-    else:
-        # Independent reference constraint evaluation directly from validated directives
-        effective_solar = [h.solar_kwh for h in scenario.hours]
-        reserve_floor = [scenario.battery.minimum_energy_kwh for _ in range(24)]
-        charge_allowed = [True for _ in range(24)]
-        discharge_allowed = [True for _ in range(24)]
-        grid_cap = [float("inf") for _ in range(24)]
-
-        for d in (target_source or []):
-            if not getattr(d, "applies", False) or getattr(d, "structured_adjustment", None) is None:
-                continue
-            adj = d.structured_adjustment
-            if d.directive_type == "solar_reduction" and isinstance(adj, SolarReductionAdjustment):
-                for h in adj.hours:
-                    effective_solar[h] *= adj.factor
-            elif d.directive_type == "minimum_battery_reserve" and isinstance(adj, BatteryReserveAdjustment):
-                for h in adj.hours:
-                    reserve_floor[h] = max(reserve_floor[h], adj.minimum_energy_kwh)
-            elif d.directive_type == "no_charge_window" and isinstance(adj, HoursOnlyAdjustment):
-                for h in adj.hours:
-                    charge_allowed[h] = False
-            elif d.directive_type == "no_discharge_window" and isinstance(adj, HoursOnlyAdjustment):
-                for h in adj.hours:
-                    discharge_allowed[h] = False
-            elif d.directive_type == "max_grid_window" and isinstance(adj, MaxGridAdjustment):
-                for h in adj.hours:
-                    grid_cap[h] = min(grid_cap[h], adj.max_grid_kwh)
+    for d in (directives or []):
+        if not getattr(d, "applies", False) or getattr(d, "structured_adjustment", None) is None:
+            continue
+        adj = d.structured_adjustment
+        if d.directive_type == "solar_reduction" and isinstance(adj, SolarReductionAdjustment):
+            for h in adj.hours:
+                effective_solar[h] *= adj.factor
+        elif d.directive_type == "minimum_battery_reserve" and isinstance(adj, BatteryReserveAdjustment):
+            for h in adj.hours:
+                reserve_floor[h] = max(reserve_floor[h], adj.minimum_energy_kwh)
+        elif d.directive_type == "no_charge_window" and isinstance(adj, HoursOnlyAdjustment):
+            for h in adj.hours:
+                charge_allowed[h] = False
+        elif d.directive_type == "no_discharge_window" and isinstance(adj, HoursOnlyAdjustment):
+            for h in adj.hours:
+                discharge_allowed[h] = False
+        elif d.directive_type == "max_grid_window" and isinstance(adj, MaxGridAdjustment):
+            for h in adj.hours:
+                grid_cap[h] = min(grid_cap[h], adj.max_grid_kwh)
 
     battery = scenario.battery
     prev_energy = battery.initial_energy_kwh

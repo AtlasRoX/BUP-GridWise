@@ -92,16 +92,16 @@ async def run_benchmark(base_url: str = None, num_requests: int = 30, concurrenc
         total_wall_time = time.perf_counter() - bench_start
         print("\n")
 
-        # Compute percentiles
-        durations.sort()
+        # Compute percentiles with numpy for statistical accuracy
+        import numpy as np
         count = len(durations)
-        min_lat = min(durations)
-        max_lat = max(durations)
-        mean_lat = statistics.mean(durations)
-        p50 = statistics.median(durations)
-        p90 = durations[int(count * 0.90) - 1] if count >= 10 else durations[-1]
-        p95 = durations[int(count * 0.95) - 1] if count >= 20 else durations[-1]
-        p99 = durations[int(count * 0.99) - 1] if count >= 100 else durations[-1]
+        min_lat = float(np.min(durations))
+        max_lat = float(np.max(durations))
+        mean_lat = float(np.mean(durations))
+        p50 = float(np.percentile(durations, 50))
+        p90 = float(np.percentile(durations, 90))
+        p95 = float(np.percentile(durations, 95))
+        p99 = float(np.percentile(durations, 99))
 
         print("-" * 80)
         print(f"{'Metric':<30} {'Value':<20} {'Target / Requirement'}")
@@ -112,6 +112,7 @@ async def run_benchmark(base_url: str = None, num_requests: int = 30, concurrenc
         print(f"{'Failure Rate':<30} {failures / count * 100:.2f}%{'':<14} 0.00%")
         print(f"{'Throughput (req/sec)':<30} {count / total_wall_time:.2f}{'':<16} -")
         print(f"{'Min Latency':<30} {min_lat:.3f} s")
+        print(f"{'Mean Latency':<30} {mean_lat:.3f} s")
         print(f"{'p50 (Median) Latency':<30} {p50:.3f} s{'':<13} < 3.0 s")
         print(f"{'p90 Latency':<30} {p90:.3f} s{'':<13} < 5.0 s")
         print(f"{'p95 Latency':<30} {p95:.3f} s{'':<13} <= 5.0 s (Full Score)")
@@ -121,7 +122,7 @@ async def run_benchmark(base_url: str = None, num_requests: int = 30, concurrenc
 
         p95_pass = p95 <= 5.0
         max_pass = max_lat < 29.0
-        print(f"Latency P95 Evaluation: {'EXCELLENT (<= 5.0s)' if p95_pass else 'ACCEPTABLE'}")
+        print(f"Latency P95 Evaluation: {'FULL-SCORE COMPLIANT (<= 5.0s)' if p95_pass else f'OUTSIDE FULL-SCORE BAND ({p95:.3f}s > 5.0s)'}")
         print(f"30-Second Limit Compliance: {'FULLY COMPLIANT (<29s)' if max_pass else 'VIOLATED'}")
         print("=" * 80)
 
