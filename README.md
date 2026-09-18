@@ -214,6 +214,64 @@ python benchmark_latency.py --base-url https://gridwise-dbdi.onrender.com --requ
 
 ---
 
+## End-to-End API Verification & Case Demonstrations
+
+The GridWise test suite includes a comprehensive Postman collection ([`postman/GridWise.postman_collection.json`](postman/GridWise.postman_collection.json)) and pre-configured environment files ([`postman/GridWise.postman_environment.json`](postman/GridWise.postman_environment.json) and [`postman/GridWise_Render_Production.postman_environment.json`](postman/GridWise_Render_Production.postman_environment.json)).
+
+The following execution screenshots portray key representative cases across the test suite:
+
+---
+
+### Case 1: Service Readiness & Health Probe (`GET /health`)
+> **Objective**: Confirm service readiness and pre-warmed HiGHS solver state.
+- **Status**: `200 OK` (5 ms)
+- **Response**: `{"status": "ok"}`
+- **Verification**: Immediate readiness probe confirmation with sub-10ms response time.
+
+![Service Readiness Probe](screenshots/01_service_readiness_health.png)
+
+---
+
+### Case 2: Scenario Optimization & Semantic Parsing (`SAMPLE-01: Solar Cleaning + Distractor`)
+> **Objective**: Interpret multiple operator notes, apply solar reduction, ignore distractors, and compute global optimal dispatch.
+- **Status**: `200 OK` (3.54 s, Test Results: 7/7 PASS)
+- **Operator Notes**:
+  1. *"Facilities will wash the rooftop solar panels from noon until 2 PM. During cleaning, usable solar should be treated as roughly 25% of the forecast."* &rarr; Interpreted as `solar_reduction` (`factor: 0.25`, `hours: [12, 13]`, `applies: true`).
+  2. *"The sports office moved next month's registration deadline."* &rarr; Correctly filtered as `no_op` (`applies: false`, `structured_adjustment: null`).
+- **Optimization Outcome**: 24-hour dispatch schedule generated, solar curtailed strictly during cleaning hours, and terminal battery neutrality strictly honored ($E_{23} = 100\text{ kWh}$).
+
+![Scenario Optimization SAMPLE-01](screenshots/02_sample_01_solar_cleaning.png)
+
+---
+
+### Case 3: Operational Edge Case Dispatch (`EDGE-01: Baseline Regular Day`)
+> **Objective**: Validate unconstrained economic arbitrage when only routine informational notes are supplied.
+- **Status**: `200 OK` (1.33 s, Test Results: 3/3 PASS)
+- **Operator Note**: *"Regular campus operations today with standard electrical distribution."* &rarr; Interpreted as `no_op` (`applies: false`, `structured_adjustment: null`).
+- **Optimization Outcome**: HiGHS MILP solver maximizes cost savings through battery arbitrage (charging at 6 BDT/kWh off-peak and discharging at 12 BDT/kWh on-peak) with exact end-of-day neutrality.
+
+![Operational Edge Case EDGE-01](screenshots/04_edge_01_baseline_arbitrage.png)
+
+---
+
+### Case 4: Validation Firewall — Incomplete Hours Sequence (`HTTP 400 Bad Request`)
+> **Objective**: Ensure out-of-spec hourly profiles (23 hours provided instead of strictly 24) are blocked deterministically.
+- **Status**: `400 Bad Request` (5 ms, Test Results: 2/2 PASS)
+- **Diagnostic Body**: Structured JSON detailing error `too_short` at field location `body.hours`.
+
+![Validation Error: Hours Count Mismatch](screenshots/03_validation_error_hours_mismatch.png)
+
+---
+
+### Case 5: Validation Firewall — Missing Required Battery Specification (`HTTP 400 Bad Request`)
+> **Objective**: Ensure requests omitting critical physical constraints are rejected immediately before solver invocation.
+- **Status**: `400 Bad Request` (6 ms, Test Results: 2/2 PASS)
+- **Diagnostic Body**: Structured JSON detailing error `missing` at field location `body.battery`.
+
+![Validation Error: Missing Battery Config](screenshots/05_validation_error_missing_battery.png)
+
+---
+
 ## Sample cURL Commands
 
 ### 1. Health Probe
