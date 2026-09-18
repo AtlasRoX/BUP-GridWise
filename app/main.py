@@ -70,6 +70,9 @@ app = FastAPI(
 )
 
 
+from fastapi.encoders import jsonable_encoder
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """
@@ -81,7 +84,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={
             "error": "Bad Request",
             "message": "Invalid request schema or parameters",
-            "details": exc.errors(),
+            "details": jsonable_encoder(exc.errors()),
         },
     )
 
