@@ -13,6 +13,11 @@ from app.rules.normalizer import fallback_interpret_note
 logger = logging.getLogger("gridwise.llm.interpreter")
 
 
+class LLMInterpretationError(Exception):
+    """Raised when language model interpretation fails or model is unconfigured."""
+    pass
+
+
 def clean_json_response(content: str) -> str:
     """
     Strips markdown code blocks, backticks, or trailing characters.
@@ -29,22 +34,24 @@ async def interpret_operator_notes(
 ) -> List[DirectiveInterpretation]:
     """
     Interprets 1-3 operator notes using NVIDIA NIM Nemotron model.
-    Falls back to deterministic normalizer if API key is unconfigured or provider is unreachable.
+    In accordance with BUP CSE Fest competition rules, an LLM interpretation step
+    is strictly mandatory. If the provider is unavailable or fails after retry,
+    a controlled LLMInterpretationError is raised.
     """
     api_key = settings.effective_api_key
 
-    # If no valid API key is present, use the deterministic fallback immediately
-    if not api_key or api_key.startswith("dummy-"):
-        logger.warning("No NVIDIA NIM API key configured. Utilizing deterministic semantic fallback.")
-        return [
-            fallback_interpret_note(i, note, battery)
-            for i, note in enumerate(operator_notes)
-        ]
+    if not api_key:
+        logger.error("NVIDIA NIM API key is not configured. Language-model interpretation is mandatory.")
+        raise LLMInterpretationError(
+            "NVIDIA NIM API key is unconfigured. Competition rules strictly require language-model interpretation."
+        )
 
     client = get_llm_client()
     user_prompt = build_user_prompt(operator_notes, battery)
 
-    # Attempt call with 1 retry on transient failure
+    last_error: Exception | None = None
+
+    # Attempt inference with 1 retry on transient failure (bounded <=12.5s total budget)
     for attempt in range(2):
         try:
             logger.info(
@@ -86,19 +93,19 @@ async def interpret_operator_notes(
                 interpretations = sorted(interpretations, key=lambda x: x.note_index)
                 return interpretations
             else:
-                logger.warning(
-                    f"LLM returned {len(interpretations)} items, expected {len(operator_notes)}. Falling back."
+                raise ValueError(
+                    f"LLM returned {len(interpretations)} items, expected {len(operator_notes)}"
                 )
 
         except Exception as e:
+            last_error = e
             logger.warning(f"NVIDIA NIM attempt {attempt + 1} failed: {e}")
             if attempt == 0:
                 import asyncio
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(0.5)
 
-    # Fallback if both attempts failed
-    logger.error("NVIDIA NIM interpretation failed. Engaging deterministic fallback parser.")
-    return [
-        fallback_interpret_note(i, note, battery)
-        for i, note in enumerate(operator_notes)
-    ]
+    # Provider failed after bounded retry
+    logger.error(f"NVIDIA NIM interpretation failed after retries: {last_error}")
+    raise LLMInterpretationError(
+        f"Language model interpretation failed after bounded retry: {last_error}"
+    )

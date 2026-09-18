@@ -60,7 +60,7 @@ async def process_scenario_optimization(scenario: ScenarioRequest) -> OptimizeEn
     replay_validate_plan(
         plan=hourly_plan,
         scenario=scenario,
-        compiled=compiled,
+        directives=validated_directives,
         total_grid_kwh=total_grid,
         total_cost_bdt=total_cost,
         peak_grid_kwh=peak_grid,

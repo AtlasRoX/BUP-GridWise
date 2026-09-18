@@ -12,6 +12,7 @@ from app.llm.client import get_llm_client, close_llm_client
 from app.models.request import ScenarioRequest
 from app.models.response import HealthResponse, OptimizeEnergyResponse
 from app.rules.guardrails import GuardrailValidationError
+from app.llm.interpreter import LLMInterpretationError
 from app.optimizer.solve import OptimizationInfeasibleError
 from app.services.optimize_energy import process_scenario_optimization
 from app.validation.replay import ReplayValidationError
@@ -86,6 +87,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "message": "Invalid request schema or parameters",
             "details": jsonable_encoder(exc.errors()),
         },
+    )
+
+
+@app.exception_handler(LLMInterpretationError)
+async def llm_exception_handler(request: Request, exc: LLMInterpretationError):
+    logger.error(f"LLM interpretation error: {exc}")
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"error": "Model Unavailable", "message": "Language model interpretation service unavailable"},
     )
 
 

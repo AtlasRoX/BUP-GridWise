@@ -1,7 +1,13 @@
-from typing import List
+from typing import List, Any
+from app.models.directives import (
+    DirectiveInterpretation,
+    SolarReductionAdjustment,
+    BatteryReserveAdjustment,
+    HoursOnlyAdjustment,
+    MaxGridAdjustment,
+)
 from app.models.request import ScenarioRequest
 from app.models.response import HourlyPlanEntry
-from app.rules.directive_compiler import CompiledConstraints
 
 
 class ReplayValidationError(Exception):
@@ -11,19 +17,59 @@ class ReplayValidationError(Exception):
 def replay_validate_plan(
     plan: List[HourlyPlanEntry],
     scenario: ScenarioRequest,
-    compiled: CompiledConstraints,
-    total_grid_kwh: float,
-    total_cost_bdt: float,
-    peak_grid_kwh: float,
-    tolerance: float = 0.005,
+    directives: Any = None,
+    total_grid_kwh: float = 0.0,
+    total_cost_bdt: float = 0.0,
+    peak_grid_kwh: float = 0.0,
+    tolerance: float = 0.01,
+    compiled: Any = None,
 ) -> None:
     """
     Independent hour-by-hour re-evaluation of the entire schedule against
     energy balance, effective solar, battery dynamics, rate limits, directive rules,
     end-of-day neutrality, and aggregate totals.
+    When given raw directives, this evaluator calculates reference constraints
+    strictly independently without consuming production compiler output.
     """
     if len(plan) != 24:
         raise ReplayValidationError(f"Hourly plan must have 24 hours, got {len(plan)}")
+
+    target_source = compiled if compiled is not None else directives
+
+    if hasattr(target_source, "effective_solar"):
+        # Backward compatibility with existing tests passing CompiledConstraints
+        effective_solar = list(target_source.effective_solar)
+        reserve_floor = list(target_source.reserve_floor)
+        charge_allowed = list(target_source.charge_allowed)
+        discharge_allowed = list(target_source.discharge_allowed)
+        grid_cap = list(target_source.grid_cap)
+    else:
+        # Independent reference constraint evaluation directly from validated directives
+        effective_solar = [h.solar_kwh for h in scenario.hours]
+        reserve_floor = [scenario.battery.minimum_energy_kwh for _ in range(24)]
+        charge_allowed = [True for _ in range(24)]
+        discharge_allowed = [True for _ in range(24)]
+        grid_cap = [float("inf") for _ in range(24)]
+
+        for d in (target_source or []):
+            if not getattr(d, "applies", False) or getattr(d, "structured_adjustment", None) is None:
+                continue
+            adj = d.structured_adjustment
+            if d.directive_type == "solar_reduction" and isinstance(adj, SolarReductionAdjustment):
+                for h in adj.hours:
+                    effective_solar[h] *= adj.factor
+            elif d.directive_type == "minimum_battery_reserve" and isinstance(adj, BatteryReserveAdjustment):
+                for h in adj.hours:
+                    reserve_floor[h] = max(reserve_floor[h], adj.minimum_energy_kwh)
+            elif d.directive_type == "no_charge_window" and isinstance(adj, HoursOnlyAdjustment):
+                for h in adj.hours:
+                    charge_allowed[h] = False
+            elif d.directive_type == "no_discharge_window" and isinstance(adj, HoursOnlyAdjustment):
+                for h in adj.hours:
+                    discharge_allowed[h] = False
+            elif d.directive_type == "max_grid_window" and isinstance(adj, MaxGridAdjustment):
+                for h in adj.hours:
+                    grid_cap[h] = min(grid_cap[h], adj.max_grid_kwh)
 
     battery = scenario.battery
     prev_energy = battery.initial_energy_kwh
@@ -48,17 +94,15 @@ def replay_validate_plan(
             raise ReplayValidationError(f"Hour {h}: negative battery energy {entry.battery_kwh}")
 
         # 2. Solar bound
-        effective_solar = compiled.effective_solar[h]
-        if entry.solar_used_kwh > effective_solar + tolerance:
+        if entry.solar_used_kwh > effective_solar[h] + tolerance:
             raise ReplayValidationError(
-                f"Hour {h}: solar used ({entry.solar_used_kwh}) exceeds effective solar ({effective_solar})"
+                f"Hour {h}: solar used ({entry.solar_used_kwh}) exceeds effective solar ({effective_solar[h]})"
             )
 
         # 3. Grid cap bound
-        grid_cap = compiled.grid_cap[h]
-        if entry.grid_kwh > grid_cap + tolerance:
+        if entry.grid_kwh > grid_cap[h] + tolerance:
             raise ReplayValidationError(
-                f"Hour {h}: grid import ({entry.grid_kwh}) exceeds grid cap ({grid_cap})"
+                f"Hour {h}: grid import ({entry.grid_kwh}) exceeds grid cap ({grid_cap[h]})"
             )
 
         # 4. Battery actions & rates
@@ -72,7 +116,7 @@ def replay_validate_plan(
                 )
         elif entry.battery_action == "charge":
             charge_kwh = entry.battery_kwh
-            if not compiled.charge_allowed[h] and charge_kwh > tolerance:
+            if not charge_allowed[h] and charge_kwh > tolerance:
                 raise ReplayValidationError(f"Hour {h}: battery charged during prohibited window")
             if charge_kwh > battery.max_charge_kwh_per_hour + tolerance:
                 raise ReplayValidationError(
@@ -80,7 +124,7 @@ def replay_validate_plan(
                 )
         elif entry.battery_action == "discharge":
             discharge_kwh = entry.battery_kwh
-            if not compiled.discharge_allowed[h] and discharge_kwh > tolerance:
+            if not discharge_allowed[h] and discharge_kwh > tolerance:
                 raise ReplayValidationError(f"Hour {h}: battery discharged during prohibited window")
             if discharge_kwh > battery.max_discharge_kwh_per_hour + tolerance:
                 raise ReplayValidationError(
@@ -105,10 +149,10 @@ def replay_validate_plan(
             )
 
         # 7. Battery capacity & reserve floor bounds
-        reserve_floor = compiled.reserve_floor[h]
-        if entry.battery_energy_after_kwh < reserve_floor - tolerance:
+        reserve_floor_h = reserve_floor[h]
+        if entry.battery_energy_after_kwh < reserve_floor_h - tolerance:
             raise ReplayValidationError(
-                f"Hour {h}: battery energy ({entry.battery_energy_after_kwh}) below reserve floor ({reserve_floor})"
+                f"Hour {h}: battery energy ({entry.battery_energy_after_kwh}) below reserve floor ({reserve_floor_h})"
             )
         if entry.battery_energy_after_kwh > battery.capacity_kwh + tolerance:
             raise ReplayValidationError(

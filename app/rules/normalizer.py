@@ -63,9 +63,10 @@ def parse_time_window(text: str) -> Optional[List[int]]:
     return list(range(start_hour, end_hour))
 
 
-def parse_solar_factor(text: str) -> float:
+def parse_solar_factor(text: str) -> Optional[float]:
     """
     Extracts remaining usable solar fraction from text.
+    Returns None if no clear numeric factor or fraction is specified (no guessing).
     """
     text_lower = text.lower()
     if "one-fifth" in text_lower:
@@ -85,12 +86,13 @@ def parse_solar_factor(text: str) -> float:
         usable_pct = float(pct_of_match.group(1))
         return max(0.0, min(1.0, usable_pct / 100.0))
 
-    return 0.25  # Safe default if undetermined
+    return None
 
 
-def parse_battery_reserve(text: str, battery: BatteryConfig) -> float:
+def parse_battery_reserve(text: str, battery: BatteryConfig) -> Optional[float]:
     """
     Extracts battery reserve in kWh, handling relative percentage of capacity.
+    Returns None if no numeric reserve is specified (no guessing).
     """
     text_lower = text.lower()
     pct_match = re.search(r"(\d{1,3})%\s*of\s*(?:the\s*)?battery\s*capacity", text_lower)
@@ -102,12 +104,13 @@ def parse_battery_reserve(text: str, battery: BatteryConfig) -> float:
     if kwh_match:
         return float(kwh_match.group(1))
 
-    return battery.minimum_energy_kwh
+    return None
 
 
-def parse_grid_cap(text: str) -> float:
+def parse_grid_cap(text: str) -> Optional[float]:
     """
     Extracts max grid import cap in kWh.
+    Returns None if no numeric cap is specified (no guessing).
     """
     text_lower = text.lower()
     kwh_match = re.search(r"(?:exceed|limit|stay at or below|cap of)\s*(\d+(?:\.\d+)?)\s*kwh", text_lower)
@@ -116,14 +119,15 @@ def parse_grid_cap(text: str) -> float:
     any_kwh = re.search(r"(\d+(?:\.\d+)?)\s*kwh", text_lower)
     if any_kwh:
         return float(any_kwh.group(1))
-    return 150.0
+    return None
 
 
 def fallback_interpret_note(
     note_index: int, note_text: str, battery: BatteryConfig
 ) -> DirectiveInterpretation:
     """
-    Deterministic fallback parser used if LLM provider is offline or unreachable.
+    Deterministic reference/test parser for offline testing.
+    Strictly verifies existence of parameters without inventing defaults.
     """
     text_lower = note_text.lower()
     hours = parse_time_window(note_text)
@@ -134,13 +138,14 @@ def fallback_interpret_note(
     ):
         if hours:
             factor = parse_solar_factor(note_text)
-            return DirectiveInterpretation(
-                note_index=note_index,
-                applies=True,
-                directive_type="solar_reduction",
-                structured_adjustment=SolarReductionAdjustment(hours=hours, factor=factor),
-                explanation=f"Identified solar reduction in hours {hours} with factor {factor}.",
-            )
+            if factor is not None:
+                return DirectiveInterpretation(
+                    note_index=note_index,
+                    applies=True,
+                    directive_type="solar_reduction",
+                    structured_adjustment=SolarReductionAdjustment(hours=hours, factor=factor),
+                    explanation=f"Identified solar reduction in hours {hours} with factor {factor}.",
+                )
 
     # 2. No charge window
     if any(k in text_lower for k in ("charger", "charging", "charge circuit", "charging circuit")) and any(
@@ -170,25 +175,27 @@ def fallback_interpret_note(
     if any(k in text_lower for k in ("reserve", "emergency", "stored", "remain in the battery", "data center requires", "battery capacity")):
         if hours:
             reserve_kwh = parse_battery_reserve(note_text, battery)
-            return DirectiveInterpretation(
-                note_index=note_index,
-                applies=True,
-                directive_type="minimum_battery_reserve",
-                structured_adjustment=BatteryReserveAdjustment(hours=hours, minimum_energy_kwh=reserve_kwh),
-                explanation=f"Emergency battery reserve of {reserve_kwh} kWh required in hours {hours}.",
-            )
+            if reserve_kwh is not None:
+                return DirectiveInterpretation(
+                    note_index=note_index,
+                    applies=True,
+                    directive_type="minimum_battery_reserve",
+                    structured_adjustment=BatteryReserveAdjustment(hours=hours, minimum_energy_kwh=reserve_kwh),
+                    explanation=f"Emergency battery reserve of {reserve_kwh} kWh required in hours {hours}.",
+                )
 
     # 5. Max grid window
     if any(k in text_lower for k in ("grid import", "grid intake", "feeder", "transformer", "substation")):
         if hours:
             cap_kwh = parse_grid_cap(note_text)
-            return DirectiveInterpretation(
-                note_index=note_index,
-                applies=True,
-                directive_type="max_grid_window",
-                structured_adjustment=MaxGridAdjustment(hours=hours, max_grid_kwh=cap_kwh),
-                explanation=f"Grid import capped at {cap_kwh} kWh in hours {hours}.",
-            )
+            if cap_kwh is not None:
+                return DirectiveInterpretation(
+                    note_index=note_index,
+                    applies=True,
+                    directive_type="max_grid_window",
+                    structured_adjustment=MaxGridAdjustment(hours=hours, max_grid_kwh=cap_kwh),
+                    explanation=f"Grid import capped at {cap_kwh} kWh in hours {hours}.",
+                )
 
     # 6. Default to no_op
     return DirectiveInterpretation(

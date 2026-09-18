@@ -36,12 +36,12 @@ class Settings(BaseSettings):
         description="Generic LLM model fallback"
     )
     llm_timeout_seconds: float = Field(
-        default=12.0,
+        default=6.0,
         alias="LLM_TIMEOUT_SECONDS",
         description="Timeout for LLM inference requests"
     )
     solver_timeout_seconds: float = Field(
-        default=8.0,
+        default=4.0,
         alias="SOLVER_TIMEOUT_SECONDS",
         description="Timeout for HiGHS MILP solver"
     )

@@ -13,6 +13,6 @@ services:
       - key: NVIDIA_NIM_BASE_URL
         value: https://integrate.api.nvidia.com/v1
       - key: LLM_TIMEOUT_SECONDS
-        value: "12"
+        value: "6"
       - key: SOLVER_TIMEOUT_SECONDS
-        value: "8"
+        value: "4"
