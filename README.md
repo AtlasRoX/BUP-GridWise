@@ -83,6 +83,11 @@ The service operates as a strictly ordered, deterministic pipeline:
 
 ## Public Endpoints Contract
 
+### Live Public Service URL (Render Deployment)
+- **Base URL**: `https://gridwise-dbdi.onrender.com`
+- **Health Check**: `https://gridwise-dbdi.onrender.com/health`
+- **Optimize Endpoint**: `https://gridwise-dbdi.onrender.com/optimize-energy`
+
 The microservice exposes two public HTTP endpoints:
 
 | Endpoint | Method | Purpose | Status Code | Expected Response |
@@ -101,8 +106,8 @@ The microservice exposes two public HTTP endpoints:
 ### 1. Clone & Set Up Virtual Environment
 ```bash
 # Clone the repository
-git clone https://github.com/your-team/gridwise.git
-cd gridwise
+git clone https://github.com/AtlasRoX/BUP-GridWise.git
+cd BUP-GridWise
 
 # Create virtual environment
 python -m venv .venv
