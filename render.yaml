@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: gridwise-optimizer
+    runtime: docker
+    plan: starter
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: NVIDIA_NIM_API_KEY
+        sync: false
+      - key: NVIDIA_NIM_MODEL
+        value: nvidia/nemotron-3-super-120b-a12b
+      - key: NVIDIA_NIM_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
+      - key: LLM_TIMEOUT_SECONDS
+        value: "12"
+      - key: SOLVER_TIMEOUT_SECONDS
+        value: "8"
